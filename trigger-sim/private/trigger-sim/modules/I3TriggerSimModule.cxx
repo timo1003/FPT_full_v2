@@ -254,8 +254,8 @@ void I3TriggerSimModule::DAQ(I3FramePtr frame)
             
       case TypeID::FAINT_PARTICLE:
       {
-        int hit_min, hit_max, double_min,azimuth_histogram_min,zenith_histogram_min;
-        double time_window, time_window_separation, max_trigger_length, double_velocity_min, double_velocity_max, histogram_binning, slcfraction_min;
+        int hit_min, hit_max, double_min,triple_min;
+        double time_window, time_window_separation, max_trigger_length, double_velocity_min, double_velocity_max, slcfraction_min;
         trigger_config.GetTriggerConfigValue("time_window", time_window);
         trigger_config.GetTriggerConfigValue("time_window_separation", time_window_separation);
         trigger_config.GetTriggerConfigValue("max_trigger_length", max_trigger_length);
@@ -264,9 +264,7 @@ void I3TriggerSimModule::DAQ(I3FramePtr frame)
         trigger_config.GetTriggerConfigValue("double_velocity_min", double_velocity_min);
         trigger_config.GetTriggerConfigValue("double_velocity_max", double_velocity_max);
         trigger_config.GetTriggerConfigValue("double_min", double_min);
-        trigger_config.GetTriggerConfigValue("azimuth_histogram_min", azimuth_histogram_min);
-        trigger_config.GetTriggerConfigValue("zenith_histogram_min", zenith_histogram_min);
-        trigger_config.GetTriggerConfigValue("histogram_binning", histogram_binning);
+        trigger_config.GetTriggerConfigValue("triple_min", triple_min);
         trigger_config.GetTriggerConfigValue("slcfraction_min", slcfraction_min);
         service = std::make_unique<FaintParticleTriggerAlgorithm>(time_window,
                                                                  time_window_separation,
@@ -276,9 +274,7 @@ void I3TriggerSimModule::DAQ(I3FramePtr frame)
                                                                  double_velocity_min,
                                                                  double_velocity_max,
                                                                  double_min,
-                                                                 azimuth_histogram_min,
-                                                                 zenith_histogram_min,
-                                                                 histogram_binning,
+                                                                 triple_min,
                                                                  slcfraction_min,                                                       
                                                                  geometry_,
                                                                  domset,

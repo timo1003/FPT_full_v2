@@ -18,11 +18,9 @@ using namespace boost::assign;
   double double_velocity_min_;
   double double_velocity_max_;
   unsigned int double_min_;
-  unsigned int azimuth_histogram_min_; 
-  unsigned int zenith_histogram_min_;
-  double histogram_binning_;
+  unsigned int triple_min_; 
   double slcfraction_min_;
-FaintParticleTriggerAlgorithm::FaintParticleTriggerAlgorithm(double time_window,double time_window_separation, double max_trigger_length, unsigned int hit_min,unsigned int hit_max,double double_velocity_min,double double_velocity_max, unsigned int double_min,unsigned int azimuth_histogram_min,unsigned int zenith_histogram_min, double histogram_binning, double slcfraction_min,  I3GeometryConstPtr Geometry,int domSet, I3MapKeyVectorIntConstPtr customDomSets) : 
+FaintParticleTriggerAlgorithm::FaintParticleTriggerAlgorithm(double time_window,double time_window_separation, double max_trigger_length, unsigned int hit_min,unsigned int hit_max,double double_velocity_min,double double_velocity_max, unsigned int double_min,unsigned int triple_min,double slcfraction_min,  I3GeometryConstPtr Geometry,int domSet, I3MapKeyVectorIntConstPtr customDomSets) : 
   TriggerService(domSet, customDomSets),  
   time_window_(time_window),
   time_window_separation_(time_window_separation),
@@ -32,9 +30,7 @@ FaintParticleTriggerAlgorithm::FaintParticleTriggerAlgorithm(double time_window,
   double_velocity_min_(double_velocity_min),
   double_velocity_max_(double_velocity_max),
   double_min_(double_min),
-  azimuth_histogram_min_(azimuth_histogram_min), 
-  zenith_histogram_min_(zenith_histogram_min), 
-  histogram_binning_(histogram_binning), 
+  triple_min_(triple_min), 
   slcfraction_min_(slcfraction_min),
   geo_(Geometry)
  
@@ -49,9 +45,7 @@ FaintParticleTriggerAlgorithm::FaintParticleTriggerAlgorithm(double time_window,
   log_debug("  Double velocity min = %f", double_velocity_min_);
   log_debug("  Double velocity max = %f", double_velocity_max_);
   log_debug("  Minimum Double threshold = %d",double_min_);
-  log_debug("  Minimum Zenith threshold= %d",azimuth_histogram_min_);
-  log_debug("  Minimum Azimuth threshold= %d",zenith_histogram_min);
-  log_debug("  Binning step for direction histograms= %f",histogram_binning_);
+  log_debug("  Minimum Triple threshold= %d",triple_min);
   log_debug("  Minimum SLC fraction threshold= %f",slcfraction_min_);
    
 }
@@ -127,12 +121,9 @@ void FaintParticleTriggerAlgorithm::Trigger()
     unsigned int number_doubles = Double_Indices.size()/2;
     if (number_doubles >= double_min_ ){
         
-            // Calculate the direction for all Doubles, histogram them and return the count of the maximum bin
-            std::vector<double> dir = getDirection(timeHits,Double_Indices,geo_);
-            unsigned int number_azimuth = dir[0];
-            unsigned int number_zenith = dir[1];
-            //Third cut: Minimum clustering of Doubles in zenith and azimuth
-            if (number_zenith > zenith_histogram_min_ && number_azimuth > azimuth_histogram_min_) {
+            // Third cut: Number of triple combinations
+            unsigned int number_triples = TripleThreshold(timeHits,Double_Indices,geo_);
+            if (number_triples > triple_min_ ){ 
 
                  //Check if previous window was above threshold
                  if (timeHits_current->size()>0){
@@ -265,61 +256,41 @@ double FaintParticleTriggerAlgorithm::getDistance(TriggerHit hit1, TriggerHit hi
   return diff;
 }
 
-std::vector<double> FaintParticleTriggerAlgorithm::getDirection(TriggerHitVectorPtr timeWindowHits, std::vector<int> Double_Indices,I3GeometryConstPtr Geometry)
+
+unsigned int FaintParticleTriggerAlgorithm::TripleThreshold(TriggerHitVectorPtr timeWindowHits,std::vector<int> Double_Indices,I3GeometryConstPtr Geometry)
 {
-    /*Calculate the direction for each Double and histogram the values with specified binning parameter. The value of the bin with the maximum number of entries for zenith and azimuth is returned.
-    */
-    std::vector<double> final_zen_azi;
-    std::vector<double> Zenith_values;
-    std::vector<double> Azimuth_values;
+    unsigned int triple_combinations =0;
     int loop_end = Double_Indices.size();
-    for (int j = 0; j <= loop_end-2; j+= 2) {
-        TriggerHit hit1 = (*timeWindowHits)[Double_Indices[j]];
-        TriggerHit hit2 = (*timeWindowHits)[Double_Indices[j+1]]; 
-        I3OMGeoMap::const_iterator geo_iterator_1 = geo_->omgeo.find(OMKey(hit1.string, hit1.pos));
-        I3OMGeoMap::const_iterator geo_iterator_2 = geo_->omgeo.find(OMKey(hit2.string, hit2.pos));
-
-        double x1 = geo_iterator_1->second.position.GetX();
-        double y1 = geo_iterator_1->second.position.GetY();
-        double z1 = geo_iterator_1->second.position.GetZ();
-        double x2 = geo_iterator_2->second.position.GetX();
-        double y2 = geo_iterator_2->second.position.GetY();
-        double z2 = geo_iterator_2->second.position.GetZ();
-        I3Direction dir1((x2-x1),(y2-y1),(z2-z1));
-        Zenith_values.push_back(dir1.GetZenith()/I3Units::degree);
-        Azimuth_values.push_back(dir1.GetAzimuth()/I3Units::degree);
-
-      
-    }
-    std::vector<double> hist_zenith = CalcHistogram(Zenith_values, 0, 180, histogram_binning_);
-    std::vector<double> hist_azimuth = CalcHistogram(Azimuth_values, 0, 360, histogram_binning_);
-    final_zen_azi.insert(final_zen_azi.end(), hist_azimuth.begin(), hist_azimuth.end());
-    final_zen_azi.insert(final_zen_azi.end(), hist_zenith.begin(), hist_zenith.end());     
-    return final_zen_azi;
-}
-
-
-std::vector<double> FaintParticleTriggerAlgorithm::CalcHistogram(std::vector<double> Angles, int lower_bound, int upper_bound, int bin_size) {
-    // Histogram the input values
-    std::vector<int> hist_vals;
-    std::vector<double> mean_angle_vals, Returnval;
-
-    for (int j = lower_bound; j < upper_bound; j += bin_size) {
-        // Include 180 and 360° in the last bins 160-180. 
-        int upper_bin_size = j + bin_size;
-        if (j == upper_bound - bin_size) {
-            upper_bin_size = j + bin_size + 1;
-        }
-        int hist_counter = 0;
-        std::vector<double> angle_values;
-        for (double k : Angles) {
-            if (k >= j && k < upper_bin_size) {
-                hist_counter += 1;
-                angle_values.push_back(k);
+    for (int j = 0; j < loop_end-2; j+= 2) {
+            for (int k = j + 2; k <= loop_end-2; k += 2) {
+                //Check for two doubles that share the middle hit in time (0,1) (1,2) -> (0,1,2)
+                int hit1_ind = Double_Indices[j+1];
+                int hit2_ind =Double_Indices[k];
+                if ( hit1_ind == hit2_ind )
+                {
+                    TriggerHit hit1 = (*timeWindowHits)[Double_Indices[j]];
+                    TriggerHit hit2 = (*timeWindowHits)[Double_Indices[k+1]]; 
+                    OMKey omkey1(hit1.string, hit1.pos);
+                    OMKey omkey2(hit2.string, hit2.pos);
+                    if (omkey1 != omkey2){
+                        // As the doublets are velocity consistent only the third component (0-2) is checked                        
+                        double distance = getDistance(hit1, hit2, geo_);
+                        double time = abs(hit2.time - hit1.time);
+                        //in km/s
+                        double velocity = 1e6*distance/time;
+                        if (velocity> double_velocity_min_ && velocity <double_velocity_max_){
+                            triple_combinations++;
+                            //stop calculating if threshold is exceeded (No other cut uses the triple information)
+                            if (triple_combinations>triple_min_) {
+                                return triple_combinations;
+                                
+                                }                            
+                        }                     
+                    }
+                }
             }
-        }
-        hist_vals.push_back(hist_counter);
-    }
-    Returnval.push_back((double)*std::max_element(hist_vals.begin(), hist_vals.end()));
-    return Returnval;
+     } 
+    return triple_combinations;
 }
+
+
